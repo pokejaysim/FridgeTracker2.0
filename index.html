@@ -1,150 +1,233 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fridge Tracker 2.0 (No‑Build)</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fridge Inventory Tracker</title>
 
-  <!-- Tailwind via CDN (keeps things simple) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <style>
-    body { font-family: ui-sans-serif, system-ui, sans-serif; }
-    svg { width: 1.25rem; height: 1.25rem; }
-  </style>
-</head>
-<body class="bg-slate-100 p-4">
-  <div id="root"></div>
-
-  <!-- React & Babel (so we can write JSX in‑browser) -->
+  <!-- Core libraries -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Your app (and lightweight icon replacements) -->
+  <!-- Lucide SVG icon definitions (no build step) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <!-- Firebase SDK (compat versions so we can use the classic API) -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+  <!-- Simple utility to hide scrollbars on overflow‑x carousels -->
+  <style>
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <!-- The entire React app. This stays inline so you can keep the 100% GitHub Pages workflow. -->
   <script type="text/babel">
-    /* -------------------------------------------
-       1) _Tiny_ inline SVG React components that
-          stand in for the lucide-react icons you
-          were importing before.
-       2) We gather them into an `Icons` object and
-          ALSO expose that as `window.LucideReact` so
-          existing destructuring like
-              const { Plus } = LucideReact;
-          keeps working.
-    ------------------------------------------- */
-    const base = {
-      stroke: "currentColor",
-      fill: "none",
-      strokeWidth: 2,
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
+    // -------------------------------------------------------------
+    // 🔌  Firebase configuration (replace with your own project keys)
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyCpbaIxV6nDIose-RdRYeC-3-eH-oIsaRA",
+      authDomain: "fridge-tracker-home.firebaseapp.com",
+      databaseURL: "https://fridge-tracker-home-default-rtdb.firebaseio.com",
+      projectId: "fridge-tracker-home",
+      storageBucket: "fridge-tracker-home.appspot.com",
+      messagingSenderId: "580588734189",
+      appId: "1:580588734189:web:c8c0c03a0fcc509707aee4"
     };
 
-    const Plus = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-    );
-    const Minus = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-    );
-    const Search = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-    );
-    const AlertCircle = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
-    );
-    const Clock = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-    );
-    const PackageIcon = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <path d="M21 16V8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z" />
-        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-        <line x1="12" y1="22.08" x2="12" y2="12" />
-      </svg>
-    );
-    const Cloud = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <path d="M17.5 19a4.5 4.5 0 0 0 0-9 7 7 0 0 0-13.3 3A4 4 0 0 0 6 19Z" />
-      </svg>
-    );
-    const CloudOff = (p) => (
-      <svg {...base} {...p} viewBox="0 0 24 24">
-        <path d="m2 2 20 20" />
-        <path d="M5.6 5.6A7 7 0 0 1 17.5 12M18 18a4.5 4.5 0 0 0-6.3-6.3" />
-        <path d="M13 13a4 4 0 0 1-5.8 5.8" />
-      </svg>
-    );
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
 
-    const Icons = { Plus, Minus, Search, AlertCircle, Clock, Package: PackageIcon, Cloud, CloudOff };
-    // Preserve old API surface so destructuring still works
-    window.LucideReact = Icons;
+    // -------------------------------------------------------------
+    // 🖼  Tiny React wrappers for Lucide icons (so we can <Plus /> etc.)
+    // -------------------------------------------------------------
+    const LucideReact = {};
+    Object.entries(lucide).forEach(([name, iconNode]) => {
+      LucideReact[name] = React.forwardRef(({ color = 'currentColor', size = 24, strokeWidth = 2, className = '', ...rest }, ref) =>
+        React.createElement(
+          'svg',
+          {
+            ref,
+            xmlns: 'http://www.w3.org/2000/svg',
+            viewBox: '0 0 24 24',
+            width: size,
+            height: size,
+            fill: 'none',
+            stroke: color,
+            strokeWidth,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            className,
+            ...rest
+          },
+          iconNode.map(([tag, attrs], i) => React.createElement(tag, { key: i, ...attrs }))
+        ));
+    });
 
-    /* -------------------------------------------------
-       Minimal example UI so you can confirm everything
-       mounts correctly. Replace with your own component
-       tree or drop this file in place of the old one.
-    ------------------------------------------------- */
-    function App() {
-      const [count, setCount] = React.useState(0);
+    const { Plus, Minus, Search, AlertCircle, Clock, Package, Cloud, CloudOff } = LucideReact;
+
+    // -------------------------------------------------------------
+    // 🥫  Main component: FridgeInventory
+    // -------------------------------------------------------------
+    const { useState, useEffect } = React;
+
+    const FridgeInventory = () => {
+      /* ----------------------------- state ----------------------------- */
+      const [currentUser, setCurrentUser] = useState('');
+      const [showUserModal, setShowUserModal] = useState(true);
+      const [items, setItems] = useState([]);
+      const [searchTerm, setSearchTerm] = useState('');
+      const [selectedCategory, setSelectedCategory] = useState('All');
+      const [showAddForm, setShowAddForm] = useState(false);
+      const [loading, setLoading] = useState(true);
+      const [connected, setConnected] = useState(true);
+      const [newItem, setNewItem] = useState({
+        name: '',
+        quantity: 1,
+        unit: 'pieces',
+        category: 'Produce',
+        expirationDate: '',
+        lowStockThreshold: 1
+      });
+
+      const categories = ['All', 'Dairy', 'Produce', 'Beverages', 'Frozen', 'Pantry', 'Condiments', 'Leftovers'];
+      const units = ['pieces', 'kg', 'g', 'litres', 'mL', 'cups', 'bottles', 'cans', 'servings', 'slices', 'carton', 'bags', 'bunches'];
+
+      /* ----------------------- initial username ----------------------- */
+      useEffect(() => {
+        const savedUser = localStorage.getItem('fridgeTrackerUser');
+        if (savedUser) {
+          setCurrentUser(savedUser);
+          setShowUserModal(false);
+        }
+      }, []);
+
+      /* -------------------- Firebase listeners & sync ------------------- */
+      useEffect(() => {
+        if (showUserModal) return; // don’t attach listeners until we have a username
+
+        // Connection state listener
+        const connectedRef = database.ref('.info/connected');
+        connectedRef.on('value', (snap) => {
+          setConnected(snap.val() === true);
+        });
+
+        // Items listener
+        const itemsRef = database.ref('items');
+        itemsRef.on('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            const itemsList = Object.entries(data).map(([key, value]) => ({ ...value, id: key }));
+            setItems(itemsList);
+          } else {
+            setItems([]);
+          }
+          setLoading(false);
+        });
+
+        return () => {
+          connectedRef.off();
+          itemsRef.off();
+        };
+      }, [showUserModal]);
+
+      /* --------------------- helper + CRUD functions -------------------- */
+      const handleUserSubmit = () => {
+        if (currentUser.trim()) {
+          localStorage.setItem('fridgeTrackerUser', currentUser);
+          setShowUserModal(false);
+        }
+      };
+
+      const updateQuantity = (id, delta) => {
+        const item = items.find((i) => i.id === id);
+        if (!item) return;
+        const newQuantity = Math.max(0, item.quantity + delta);
+        database.ref(`items/${id}`).update({
+          quantity: newQuantity,
+          lastUpdatedBy: currentUser,
+          lastUpdated: new Date().toISOString()
+        });
+      };
+
+      const addItem = () => {
+        if (!newItem.name || !newItem.expirationDate) return;
+        database.ref('items').push({
+          ...newItem,
+          lastUpdatedBy: currentUser,
+          lastUpdated: new Date().toISOString()
+        });
+        setNewItem({ name: '', quantity: 1, unit: 'pieces', category: 'Produce', expirationDate: '', lowStockThreshold: 1 });
+        setShowAddForm(false);
+      };
+
+      const deleteItem = (id) => database.ref(`items/${id}`).remove();
+
+      const daysUntil = (exp) => Math.ceil((new Date(exp) - new Date()) / (1000 * 60 * 60 * 24));
+      const expClass = (exp) => (daysUntil(exp) <= 0 ? 'bg-red-100 border-red-300' : daysUntil(exp) <= 3 ? 'bg-yellow-100 border-yellow-300' : 'bg-white');
+      const lowStock = (item) => item.quantity <= item.lowStockThreshold;
+
+      const filtered = items.filter((i) => i.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategory === 'All' || i.category === selectedCategory));
+
+      const stats = {
+        total: items.length,
+        low: items.filter(lowStock).length,
+        exp: items.filter((i) => daysUntil(i.expirationDate) <= 3).length
+      };
+
+      /* ------------------------------ UI ------------------------------ */
+
+      if (showUserModal) {
+        return (
+          <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+              <h2 className="text-2xl font-bold mb-4">Welcome to Fridge Tracker</h2>
+              <input type="text" placeholder="Enter your name" className="w-full p-3 border rounded-lg mb-4" value={currentUser} onChange={(e) => setCurrentUser(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()} autoFocus />
+              <button onClick={handleUserSubmit} className="w-full bg-blue-500 text-white p-3 rounded-lg font-semibold hover:bg-blue-600">Start Tracking</button>
+            </div>
+          </div>
+        );
+      }
+
+      if (loading) {
+        return (
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <p className="text-gray-600">Connecting to Firebase...</p>
+            </div>
+          </div>
+        );
+      }
+
       return (
-        <div className="max-w-md mx-auto bg-white rounded-2xl shadow p-6 space-y-4">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <PackageIcon className="w-6 h-6" /> Fridge&nbsp;Tracker&nbsp;2
-          </h1>
+        <div className="min-h-screen">
+          {/* --- Header / Stats --- */}
+          <div className="bg-white shadow-sm sticky top-0 z-10">
+            <div className="p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h1 className="text-2xl font-bold">Fridge Inventory</h1>
+                <div className="text-right text-sm">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    {connected ? <Cloud className="w-4 h-4 text-green-500" /> : <CloudOff className="w-4 h-4 text-red-500" />}<span>User: {currentUser}</span>
+                  </div>
+                  <button onClick={() => { localStorage.removeItem('fridgeTrackerUser'); setShowUserModal(true); }} className="text-xs text-blue-500 hover:underline">Change User</button>
+                </div>
+              </div>
 
-          <p className="text-slate-600 flex items-center gap-2">
-            <Clock className="w-4 h-4" /> Items in fridge: <strong>{count}</strong>
-          </p>
+              {!connected && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-800"><strong>Offline:</strong> changes will sync when back online.</div>
+              )}
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => setCount((c) => c + 1)}
-              className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
-            >
-              <Plus className="w-4 h-4" /> Add
-            </button>
-            <button
-              onClick={() => setCount((c) => Math.max(0, c - 1))}
-              className="flex items-center gap-1 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg"
-            >
-              <Minus className="w-4 h-4" /> Remove
-            </button>
-          </div>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-blue-100 p-3 rounded-lg text-center"><Package className="w-5 h-5 mx-auto mb-1 text-blue-600" /><div className="text-xl font-bold
 
-          <div className="flex items-center gap-2">
-            <Search className="w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search item…"
-              className="flex-1 border rounded-lg px-3 py-2"
-            />
-          </div>
-
-          <p className="text-xs text-slate-500 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" /> Demo only – swap in your real components.
-          </p>
-        </div>
-      );
-    }
-
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<App />);
-  </script>
-</body>
-</html>
