@@ -48,7 +48,7 @@
 
         const { useState, useEffect } = React;
         
-        // Lucide icons setup - MODIFIED TO USE LucideReact
+        // Lucide icons setup - USING LucideReact
         const { Plus, Minus, Search, AlertCircle, Clock, Package, Cloud, CloudOff } = LucideReact; 
 
         const FridgeInventory = () => {
@@ -58,7 +58,7 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedCategory, setSelectedCategory] = useState('All');
             const [showAddForm, setShowAddForm] = useState(false);
-            const [loading, setLoading] = useState(true); // Start with loading true
+            const [loading, setLoading] = useState(true); // Initial loading state
             const [connected, setConnected] = useState(true);
             const [newItem, setNewItem] = useState({
                 name: '',
@@ -78,29 +78,22 @@
                 if (savedUser) {
                     setCurrentUser(savedUser);
                     setShowUserModal(false);
-                    // setLoading(true) will be handled by the Firebase listener useEffect
                 } else {
-                    // If no user, we are not loading Firebase data yet, so set loading to false to show modal.
-                    setLoading(false); 
+                    setLoading(false); // No user, so not loading Firebase data yet, show modal.
                 }
             }, []);
 
             // Set up Firebase listeners
             useEffect(() => {
-                // Only run if a user is set (i.e., modal is not shown)
-                if (!showUserModal && currentUser) {
-                    setLoading(true); // Set loading to true when we start fetching data for a user
-
-                    // Connection state listener
+                if (!showUserModal && currentUser) { // Ensure currentUser is also set
+                    setLoading(true); // Start loading when user is confirmed and modal is gone
                     const connectedRef = database.ref('.info/connected');
-                    const connectionListener = connectedRef.on('value', (snap) => {
+                    const onConnectUpdate = connectedRef.on('value', (snap) => {
                         setConnected(snap.val() === true);
                     });
 
-                    // Items listener
-                    const itemsRef = database.ref('items'); // Assuming items are global, not per-user for simplicity
-                                                            // If per-user, path would be `users/${currentUser}/items` or similar
-                    const itemsListener = itemsRef.on('value', (snapshot) => {
+                    const itemsRef = database.ref('items');
+                    const onItemsUpdate = itemsRef.on('value', (snapshot) => {
                         const data = snapshot.val();
                         if (data) {
                             const itemsList = Object.entries(data).map(([key, value]) => ({
@@ -110,8 +103,8 @@
                             setItems(itemsList);
                         } else {
                             setItems([]);
-                            // Initialize with sample data if empty and if this is the intended behavior
-                            // This might run for every new user if the DB is empty. Consider if this is desired.
+                            // Original sample data logic - you might want to adjust or remove this
+                            // if you don't want it to run for every user on an empty database.
                             const sampleItems = [
                                 {
                                     name: 'Orange Juice',
@@ -124,59 +117,79 @@
                                     lastUpdated: new Date().toISOString()
                                 },
                                 {
+                                    name: 'Egg Whites',
+                                    quantity: 500,
+                                    unit: 'mL',
+                                    category: 'Dairy',
+                                    expirationDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                                    lowStockThreshold: 100,
+                                    lastUpdatedBy: 'System',
+                                    lastUpdated: new Date().toISOString()
+                                },
+                                {
                                     name: 'Milk',
-                                    quantity: 1,
+                                    quantity: 4,
                                     unit: 'litres',
                                     category: 'Dairy',
                                     expirationDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                                     lowStockThreshold: 1,
                                     lastUpdatedBy: 'System',
                                     lastUpdated: new Date().toISOString()
+                                },
+                                {
+                                    name: 'Leftover Pizza',
+                                    quantity: 4,
+                                    unit: 'slices',
+                                    category: 'Leftovers',
+                                    expirationDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                                    lowStockThreshold: 1,
+                                    lastUpdatedBy: 'System',
+                                    lastUpdated: new Date().toISOString()
                                 }
                             ];
-                            // Commenting out automatic sample data push to avoid unintended writes on every empty load.
-                            // You can re-enable if this is a specific requirement for first-time setup for any user.
-                            /*
+
                             sampleItems.forEach(item => {
                                 database.ref('items').push(item);
                             });
-                            */
                         }
-                        setLoading(false); // Data loaded or confirmed empty
+                        setLoading(false);
+                    }, (error) => { // Added error callback for items listener
+                        console.error("Firebase items listener error:", error);
+                        setLoading(false); // Stop loading on error too
                     });
 
                     return () => {
-                        connectedRef.off('value', connectionListener);
-                        itemsRef.off('value', itemsListener);
+                        connectedRef.off('value', onConnectUpdate);
+                        itemsRef.off('value', onItemsUpdate);
                     };
                 } else if (!currentUser && !showUserModal) {
-                    // User logged out, clear items and stop loading
-                    setItems([]);
+                    // User logged out or no user, ensure not loading
+                    setItems([]); // Clear items
                     setLoading(false);
                 }
-            }, [showUserModal, currentUser]); // Depend on currentUser as well
+            }, [showUserModal, currentUser]); // Added currentUser dependency
 
             const handleUserSubmit = () => {
                 if (currentUser.trim()) {
-                    localStorage.setItem('fridgeTrackerUser', currentUser.trim());
+                    localStorage.setItem('fridgeTrackerUser', currentUser.trim()); // trim username
                     setShowUserModal(false);
-                    // currentUser state is already set by input field
+                    // Note: currentUser state is already set by the input's onChange
                 }
             };
-
+            
             const handleLogout = () => {
                 localStorage.removeItem('fridgeTrackerUser');
-                setCurrentUser('');
-                setShowUserModal(true);
-                setItems([]); // Clear items on logout
-                setLoading(false); // No longer loading data for a user
+                setCurrentUser(''); // Clear current user
+                setShowUserModal(true); // Show modal
+                setItems([]); // Clear items from state
+                setLoading(false); // Not loading anymore
             };
 
 
             const updateQuantity = async (id, delta) => {
                 const item = items.find(item => item.id === id);
                 if (item) {
-                    const newQuantity = Math.max(0, parseFloat((item.quantity + delta).toFixed(2))); // handle potential floating point issues
+                    const newQuantity = Math.max(0, item.quantity + delta);
                     database.ref(`items/${id}`).update({
                         quantity: newQuantity,
                         lastUpdatedBy: currentUser,
@@ -187,15 +200,16 @@
 
             const addItem = async () => {
                 if (newItem.name && newItem.expirationDate) {
-                    const itemToAdd = {
+                    const itemToAdd = { // Renamed to avoid conflict with item var in updateQuantity
                         ...newItem,
+                        // Ensure quantity and threshold are numbers
                         quantity: parseFloat(newItem.quantity) || 0,
                         lowStockThreshold: parseFloat(newItem.lowStockThreshold) || 0,
                         lastUpdatedBy: currentUser,
                         lastUpdated: new Date().toISOString()
                     };
                     database.ref('items').push(itemToAdd);
-                    setNewItem({
+                    setNewItem({ // Reset form
                         name: '',
                         quantity: 1,
                         unit: 'pieces',
@@ -208,16 +222,18 @@
             };
 
             const deleteItem = async (id) => {
-                 if(confirm(`Are you sure you want to remove this item?`)) {
-                    database.ref(`items/${id}`).remove();
-                 }
+                // Optional: Add a confirmation dialog here
+                // if (confirm("Are you sure you want to delete this item?")) {
+                database.ref(`items/${id}`).remove();
+                // }
             };
 
             const getDaysUntilExpiration = (expirationDate) => {
-                if (!expirationDate) return Infinity; // Handle cases where date might be missing
+                if (!expirationDate) return 9999; // Or handle as preferred for sorting/display
                 const today = new Date();
                 const expDate = new Date(expirationDate);
-                today.setHours(0, 0, 0, 0); // Compare date part only
+                // Normalize to midnight to compare dates only
+                today.setHours(0, 0, 0, 0);
                 expDate.setHours(0, 0, 0, 0);
                 const diffTime = expDate - today;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -226,57 +242,53 @@
 
             const getExpirationClass = (expirationDate) => {
                 const days = getDaysUntilExpiration(expirationDate);
-                if (days <= 0) return 'bg-red-100 border-red-400';
-                if (days <= 3) return 'bg-yellow-100 border-yellow-400';
-                return 'bg-white border-gray-300';
+                if (days <= 0) return 'bg-red-100 border-red-300';
+                if (days <= 3) return 'bg-yellow-100 border-yellow-300';
+                return 'bg-white border-gray-200'; // Default border for consistency
             };
 
             const isLowStock = (item) => {
                 return item.quantity > 0 && item.quantity <= item.lowStockThreshold;
             };
-            
-            const isOutOfStock = (item) => {
-                return item.quantity <= 0;
-            }
 
             const filteredItems = items.filter(item => {
                 const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
                 const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
                 return matchesSearch && matchesCategory;
-            }).sort((a,b) => getDaysUntilExpiration(a.expirationDate) - getDaysUntilExpiration(b.expirationDate));
+            }).sort((a, b) => getDaysUntilExpiration(a.expirationDate) - getDaysUntilExpiration(b.expirationDate));
 
 
             const getStats = () => {
                 const lowStockCount = items.filter(isLowStock).length;
-                const expiringSoonCount = items.filter(item => {
+                const expiringCount = items.filter(item => {
                     const days = getDaysUntilExpiration(item.expirationDate);
-                    return days >= 0 && days <= 3; // Expiring today or in next 3 days
+                    return days >=0 && days <= 3; // Only count if not already expired
                 }).length;
-                const totalItems = items.length;
-                return { total: totalItems, lowStock: lowStockCount, expiringSoon: expiringSoonCount };
+                return { total: items.length, lowStock: lowStockCount, expiring: expiringCount };
             };
 
             const stats = getStats();
 
+            // User Modal
             if (showUserModal) {
                 return (
-                    <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-30">
-                        <div className="bg-white rounded-lg p-6 shadow-xl max-w-sm w-full">
-                            <h2 className="text-2xl font-bold mb-4 text-center text-gray-700">Welcome to Fridge Tracker</h2>
+                    <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl">
+                            <h2 className="text-2xl font-bold mb-4 text-center">Welcome to Fridge Tracker</h2>
                             <div>
                                 <input
                                     type="text"
                                     placeholder="Enter your name"
-                                    className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500"
                                     value={currentUser}
                                     onChange={(e) => setCurrentUser(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleUserSubmit()}
+                                    onKeyPress={(e) => e.key === 'Enter' && currentUser.trim() && handleUserSubmit()}
                                     autoFocus
                                 />
                                 <button
                                     onClick={handleUserSubmit}
                                     disabled={!currentUser.trim()}
-                                    className="w-full bg-blue-500 text-white p-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:bg-gray-300"
+                                    className="w-full bg-blue-500 text-white p-3 rounded-lg font-semibold hover:bg-blue-600 disabled:bg-gray-400"
                                 >
                                     Start Tracking
                                 </button>
@@ -286,41 +298,37 @@
                 );
             }
 
+            // Loading Screen (shown after user is identified, before data is loaded)
             if (loading) {
                 return (
-                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                         <div className="text-center">
-                            <div role="status" className="flex flex-col items-center">
-                                <svg aria-hidden="true" className="w-10 h-10 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/>
-                                    <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0492C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5424 39.6781 93.9676 39.0409Z" fill="currentFill"/>
-                                </svg>
-                                <p className="text-gray-600 mt-3">Loading your fridge items...</p>
-                            </div>
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                            <p className="text-gray-700 text-lg">Connecting to Firebase & loading items...</p>
                         </div>
                     </div>
                 );
             }
 
+            // Main Application View
             return (
-                <div className="min-h-screen bg-gray-100">
-                    {/* Header Section */}
-                    <div className="bg-white shadow-md sticky top-0 z-20">
-                        <div className="p-4 max-w-4xl mx-auto">
+                <div className="min-h-screen bg-gray-50">
+                    <div className="bg-white shadow-sm sticky top-0 z-10">
+                        <div className="p-4 max-w-4xl mx-auto"> {/* Centered content */}
                             <div className="flex justify-between items-center mb-4">
-                                <h1 className="text-3xl font-bold text-gray-700">Fridge Inventory</h1>
+                                <h1 className="text-2xl font-bold text-gray-800">Fridge Inventory</h1>
                                 <div className="text-right">
                                     <div className="text-sm text-gray-600 flex items-center gap-2 justify-end">
                                         {connected ? (
-                                            <Cloud className="w-5 h-5 text-green-500" />
+                                            <Cloud className="w-4 h-4 text-green-500" />
                                         ) : (
-                                            <CloudOff className="w-5 h-5 text-red-500" />
+                                            <CloudOff className="w-4 h-4 text-red-500" />
                                         )}
                                         <span>User: <span className="font-semibold">{currentUser}</span></span>
                                     </div>
                                     <button 
-                                        onClick={handleLogout}
-                                        className="text-xs text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+                                        onClick={handleLogout} // Use new logout handler
+                                        className="text-xs text-blue-500 hover:underline"
                                     >
                                         Change User
                                     </button>
@@ -328,63 +336,59 @@
                             </div>
 
                             {!connected && (
-                                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-center">
-                                    <p className="text-sm text-red-800 font-medium">
-                                        <AlertCircle className="w-4 h-4 inline mr-1 mb-0.5" />
-                                        <strong>Offline:</strong> Your changes will sync when connection is restored.
+                                <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4 text-red-700">
+                                    <p className="text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4"/>
+                                        <strong>Offline:</strong> Changes will sync when connection is restored.
                                     </p>
                                 </div>
                             )}
                             
-                            {/* Stats Cards */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                                <div className="bg-blue-500 text-white p-4 rounded-lg shadow-lg text-center">
-                                    <Package className="w-7 h-7 mx-auto mb-2" />
-                                    <div className="text-2xl font-bold">{stats.total}</div>
-                                    <div className="text-sm">Total Items</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                                <div className="bg-blue-100 p-3 rounded-lg text-center shadow">
+                                    <Package className="w-5 h-5 mx-auto mb-1 text-blue-600" />
+                                    <div className="text-xl font-bold text-blue-800">{stats.total}</div>
+                                    <div className="text-xs text-gray-700">Total Items</div>
                                 </div>
-                                <div className="bg-yellow-500 text-white p-4 rounded-lg shadow-lg text-center">
-                                    <AlertCircle className="w-7 h-7 mx-auto mb-2" />
-                                    <div className="text-2xl font-bold">{stats.lowStock}</div>
-                                    <div className="text-sm">Low Stock</div>
+                                <div className="bg-yellow-100 p-3 rounded-lg text-center shadow">
+                                    <AlertCircle className="w-5 h-5 mx-auto mb-1 text-yellow-600" />
+                                    <div className="text-xl font-bold text-yellow-800">{stats.lowStock}</div>
+                                    <div className="text-xs text-gray-700">Low Stock</div>
                                 </div>
-                                <div className="bg-red-500 text-white p-4 rounded-lg shadow-lg text-center">
-                                    <Clock className="w-7 h-7 mx-auto mb-2" />
-                                    <div className="text-2xl font-bold">{stats.expiringSoon}</div>
-                                    <div className="text-sm">Expiring Soon (≤3 days)</div>
+                                <div className="bg-red-100 p-3 rounded-lg text-center shadow">
+                                    <Clock className="w-5 h-5 mx-auto mb-1 text-red-600" />
+                                    <div className="text-xl font-bold text-red-800">{stats.expiring}</div>
+                                    <div className="text-xs text-gray-700">Expiring Soon (≤3 days)</div>
                                 </div>
                             </div>
 
-                            {/* Controls: Search and Add Button */}
-                            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                                <div className="relative flex-grow">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Search items by name..."
-                                        className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                                        placeholder="Search items..."
+                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                     />
                                 </div>
                                 <button
                                     onClick={() => setShowAddForm(true)}
-                                    className="bg-green-500 text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-green-600 transition-colors shadow hover:shadow-md font-semibold"
+                                    className="bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center justify-center sm:justify-start gap-2 hover:bg-blue-600 font-medium"
                                 >
-                                    <Plus className="w-5 h-5" />
-                                    Add New Item
+                                    <Plus className="w-4 h-4" />
+                                    Add Item
                                 </button>
                             </div>
 
-                            {/* Category Filters */}
-                            <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-2">
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                 {categories.map(cat => (
                                     <button
                                         key={cat}
                                         onClick={() => setSelectedCategory(cat)}
-                                        className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all
-                                            ${selectedCategory === cat
-                                                ? 'bg-blue-600 text-white shadow-md'
+                                        className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${
+                                            selectedCategory === cat
+                                                ? 'bg-blue-500 text-white font-semibold'
                                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                         }`}
                                     >
@@ -395,99 +399,98 @@
                         </div>
                     </div>
 
-                    {/* Main Content Area for Items */}
-                    <div className="p-4 max-w-4xl mx-auto">
+                    <div className="p-4 max-w-4xl mx-auto"> {/* Centered content */}
                         {filteredItems.length === 0 ? (
-                            <div className="text-center py-10 text-gray-500">
-                                <Package className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                                <p className="text-xl font-semibold">No items found.</p>
-                                {items.length > 0 && <p className="text-sm mt-1">Try adjusting your search or category filter.</p>}
+                            <div className="text-center py-8 text-gray-500">
+                                <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                <p className="text-lg">No items found matching your criteria.</p>
                                 {items.length === 0 && searchTerm === '' && selectedCategory === 'All' && (
-                                    <p className="text-sm mt-1">Your fridge is empty! Click "Add New Item" to get started.</p>
+                                     <p className="text-sm mt-1">Add some items to get started!</p>
                                 )}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> {/* Card layout */}
                                 {filteredItems.map(item => {
                                     const daysUntilExpiration = getDaysUntilExpiration(item.expirationDate);
-                                    const itemLowStock = isLowStock(item);
-                                    const itemOutOfStock = isOutOfStock(item);
+                                    const lowStock = isLowStock(item);
                                     
-                                    let expirationText = '';
-                                    let expirationColorClass = 'text-gray-700';
+                                    let expirationText = `Expires in ${daysUntilExpiration} days`;
+                                    if (daysUntilExpiration <= 0) expirationText = `Expired ${Math.abs(daysUntilExpiration)} days ago`;
+                                    if (daysUntilExpiration === 0) expirationText = 'Expires Today';
 
-                                    if (daysUntilExpiration < 0) {
-                                        expirationText = `Expired ${Math.abs(daysUntilExpiration)} day(s) ago`;
-                                        expirationColorClass = 'text-red-600 font-bold';
-                                    } else if (daysUntilExpiration === 0) {
-                                        expirationText = 'Expires Today';
-                                        expirationColorClass = 'text-red-600 font-semibold';
-                                    } else if (daysUntilExpiration <= 3) {
-                                        expirationText = `Expires in ${daysUntilExpiration} day(s)`;
-                                        expirationColorClass = 'text-yellow-600 font-semibold';
-                                    } else {
-                                        expirationText = `Expires in ${daysUntilExpiration} day(s)`;
-                                    }
 
                                     return (
                                         <div
                                             key={item.id}
-                                            className={`p-5 rounded-lg border ${getExpirationClass(item.expirationDate)} shadow-lg transition-all hover:shadow-xl flex flex-col justify-between`}
+                                            className={`p-4 rounded-lg border shadow-md ${getExpirationClass(item.expirationDate)}`}
                                         >
-                                            <div>
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex-1">
-                                                        <h3 className="font-bold text-xl text-gray-800">{item.name}</h3>
-                                                        <p className="text-xs text-gray-500 mb-1">
-                                                            Category: {item.category}
-                                                        </p>
-                                                        <p className={`text-sm font-medium ${expirationColorClass}`}>
-                                                            <Clock className="w-4 h-4 inline mr-1 mb-0.5" />{expirationText}
-                                                        </p>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-lg text-gray-800">{item.name}</h3>
+                                                    <div className="text-xs text-gray-500">
+                                                        {item.category} • <span className="italic">Updated by {item.lastUpdatedBy}</span>
                                                     </div>
-                                                    <button
-                                                        onClick={() => deleteItem(item.id)}
-                                                        className="text-red-500 hover:text-red-700 transition-colors p-1 -mr-1 -mt-1"
-                                                        title="Remove item"
-                                                    >
-                                                        <Minus className="w-5 h-5" /> {/* Using Minus for delete icon, consider Trash2 from lucide-react */}
-                                                    </button>
                                                 </div>
+                                                <button
+                                                    onClick={() => deleteItem(item.id)}
+                                                    className="text-red-500 text-sm hover:text-red-700 font-medium p-1"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
 
-                                                <div className="flex items-center justify-between my-4">
+                                            <div className="flex items-center justify-between my-3">
+                                                <div className="flex items-center gap-3">
                                                     <button
                                                         onClick={() => updateQuantity(item.id, -1)}
-                                                        disabled={itemOutOfStock}
-                                                        className="bg-gray-200 p-2.5 rounded-full hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                                        title="Decrease quantity"
+                                                        disabled={item.quantity <= 0}
+                                                        className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300 disabled:opacity-50"
                                                     >
-                                                        <Minus className="w-5 h-5 text-gray-700" />
+                                                        <Minus className="w-4 h-4" />
                                                     </button>
                                                     <div className="text-center">
-                                                        <div className="text-2xl font-bold text-gray-800">
-                                                            {item.quantity} <span className="text-lg font-normal text-gray-600">{item.unit}</span>
+                                                        <div className="text-xl font-bold text-gray-700">
+                                                            {item.quantity} <span className="text-base font-normal">{item.unit}</span>
                                                         </div>
-                                                        {itemLowStock && !itemOutOfStock && (
-                                                            <div className="text-xs text-yellow-600 font-semibold mt-1">Low Stock! (Alert: ≤{item.lowStockThreshold})</div>
+                                                        {lowStock && (
+                                                            <div className="text-xs text-yellow-600 font-semibold">Low Stock!</div>
                                                         )}
-                                                        {itemOutOfStock && (
-                                                            <div className="text-xs text-red-600 font-semibold mt-1">Out of Stock!</div>
+                                                        {item.quantity <= 0 && (
+                                                            <div className="text-xs text-red-600 font-semibold">Out of Stock!</div>
                                                         )}
                                                     </div>
                                                     <button
                                                         onClick={() => updateQuantity(item.id, 1)}
-                                                        className="bg-gray-200 p-2.5 rounded-full hover:bg-gray-300 transition-colors"
-                                                        title="Increase quantity"
+                                                        className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"
                                                     >
-                                                        <Plus className="w-5 h-5 text-gray-700" />
+                                                        <Plus className="w-4 h-4" />
                                                     </button>
+                                                </div>
+
+                                                <div className="text-right">
+                                                    <div className={`text-sm font-medium ${daysUntilExpiration <= 3 ? (daysUntilExpiration <=0 ? 'text-red-600' : 'text-yellow-600') : 'text-gray-700'}`}>
+                                                        {expirationText}
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <div className="mt-auto pt-3 border-t border-gray-200">
-                                                 <p className="text-xs text-gray-500 italic text-center">
-                                                    Last updated by: {item.lastUpdatedBy} on {new Date(item.lastUpdated).toLocaleDateString()}
-                                                </p>
+                                            {/* Quick use buttons from original user code - slightly adjusted */}
+                                            <div className="mt-3 flex gap-2 flex-wrap">
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, -1)}
+                                                    disabled={item.quantity <= 0}
+                                                    className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200 disabled:opacity-60"
+                                                >
+                                                    I used 1
+                                                </button>
+                                                {item.quantity > 1 && ( // Condition adjusted for "used half"
+                                                    <button
+                                                        onClick={() => updateQuantity(item.id, -Math.floor(item.quantity / 2))}
+                                                        className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200"
+                                                    >
+                                                        I used half
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -497,18 +500,18 @@
                         )}
                     </div>
 
-                    {/* Add/Edit Item Modal */}
+                    {/* Add Item Modal */}
                     {showAddForm && (
-                        <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-30">
-                            <div className="bg-white rounded-lg p-6 shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
-                                <h2 className="text-2xl font-bold mb-6 text-gray-700">Add New Fridge Item</h2>
+                        <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-20">
+                            <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto scrollbar-hide shadow-xl">
+                                <h2 className="text-xl font-bold mb-5 text-gray-800">Add New Item</h2>
                                 <div>
                                     <div className="mb-4">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Item Name*</label>
                                         <input
                                             type="text"
                                             required
-                                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
                                             value={newItem.name}
                                             onChange={(e) => setNewItem({...newItem, name: e.target.value})}
                                         />
@@ -520,16 +523,16 @@
                                             <input
                                                 type="number"
                                                 min="0"
-                                                step="any"
-                                                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                step="0.1" // Retained from original user code
+                                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
                                                 value={newItem.quantity}
-                                                onChange={(e) => setNewItem({...newItem, quantity: e.target.value})}
+                                                onChange={(e) => setNewItem({...newItem, quantity: e.target.value === '' ? '' : parseFloat(e.target.value)})}
                                             />
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
                                             <select
-                                                className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-1 focus:ring-blue-500"
                                                 value={newItem.unit}
                                                 onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
                                             >
@@ -543,7 +546,7 @@
                                     <div className="mb-4">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                                         <select
-                                            className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-1 focus:ring-blue-500"
                                             value={newItem.category}
                                             onChange={(e) => setNewItem({...newItem, category: e.target.value})}
                                         >
@@ -558,7 +561,7 @@
                                         <input
                                             type="date"
                                             required
-                                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
                                             value={newItem.expirationDate}
                                             min={new Date().toISOString().split('T')[0]}
                                             onChange={(e) => setNewItem({...newItem, expirationDate: e.target.value})}
@@ -566,28 +569,28 @@
                                     </div>
 
                                     <div className="mb-5">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Low Stock Alert (Qty)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Low Stock Alert (when qty ≤)</label>
                                         <input
                                             type="number"
                                             min="0"
-                                            step="any"
-                                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            step="0.1" // Retained from original user code
+                                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
                                             value={newItem.lowStockThreshold}
-                                            onChange={(e) => setNewItem({...newItem, lowStockThreshold: e.target.value})}
+                                            onChange={(e) => setNewItem({...newItem, lowStockThreshold: e.target.value === '' ? '' : parseFloat(e.target.value)})}
                                         />
                                     </div>
 
-                                    <div className="flex gap-3 pt-1">
+                                    <div className="flex gap-3">
                                         <button
                                             onClick={addItem}
                                             disabled={!newItem.name.trim() || !newItem.expirationDate}
-                                            className="flex-1 bg-blue-500 text-white p-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:bg-gray-300"
+                                            className="flex-1 bg-blue-500 text-white p-3 rounded-lg font-semibold hover:bg-blue-600 disabled:bg-gray-400"
                                         >
                                             Add Item
                                         </button>
                                         <button
                                             onClick={() => setShowAddForm(false)}
-                                            className="flex-1 bg-gray-200 text-gray-700 p-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                                            className="flex-1 bg-gray-200 text-gray-700 p-3 rounded-lg font-semibold hover:bg-gray-300"
                                         >
                                             Cancel
                                         </button>
