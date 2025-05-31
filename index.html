@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,10 +28,15 @@
   <!-- App code -->
   <script type="text/babel" data-presets="react">
     // Wait until the DOM is ready and globals are loaded
-    document.addEventListener('DOMContentLoaded', () => {
-      // Lucide: map raw SVG strings -> simple <span dangerouslySetInnerHTML> wrappers
-      const icon = (name) => (props) => {
-        const svg = lucide[name]?.toSvg({ ...props, class: props.className });
+    // --- boot the app once the DOM is ready (works even if it already fired) ----
+      function boot() {
+        /* APP CODE MOVED HERE AUTOMATICALLY BY THE REGEX REPLACER */
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+      } else {
+        boot();
+      }
         return <span dangerouslySetInnerHTML={{ __html: svg }} />;
       };
       const Plus = icon('Plus');
@@ -207,3 +211,4 @@
                     <select className="border p-2 rounded" value={draft.unit} onChange={e=>setDraft({...draft,unit:e.target.value})}>{units.map(u=><option key={u}>{u}</option>)}</select>
                   </div>
                   <select className="border p-2 rounded w-full mb-3" value={draft.category} onChange={e=>setDraft({...draft,category:e.target.value})}>{categories.filter(c=>c!=='All').map(c=><option key={c}>{c
+
