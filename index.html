@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+    <script src="https://unpkg.com/lucide-react@0.378.0/dist/umd/lucide-react.js"></script>
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
@@ -59,7 +59,7 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedCategory, setSelectedCategory] = useState('All');
             const [showAddForm, setShowAddForm] = useState(false);
-            const [loading, setLoading] = useState(true); // Initial loading state
+            const [loading, setLoading] = useState(true); 
             const [connected, setConnected] = useState(true);
             const [newItem, setNewItem] = useState({
                 name: '',
@@ -263,9 +263,6 @@
                 );
             }
 
-            // Main Application View (Simplified for debugging if needed)
-            // To test if the issue is within this block, you can temporarily comment out complex parts
-            // and replace with something simple like: <h1>Hello {currentUser}</h1>
             return (
                 <div className="min-h-screen bg-gray-50">
                     <div className="bg-white shadow-sm sticky top-0 z-10">
