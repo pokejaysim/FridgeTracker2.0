@@ -9,44 +9,42 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- React & React‑DOM (UMD builds) -->
+  <!-- React & React‑DOM (UMD) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" defer></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" defer></script>
 
-  <!-- Firebase v9 *compat* (global firebase object) -->
+  <!-- Firebase v9 compat -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js" defer></script>
 
-  <!-- Lucide‑React UMD (exposes `window.lucideReact`) -->
-  <script src="https://unpkg.com/lucide-react@0.378.0/dist/umd/lucide-react.min.js" defer></script>
+  <!-- Lucide icons (vanilla, not react‑specific) -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
 
-  <!-- Babel for in‑browser JSX transform (development only) -->
+  <!-- Babel (dev only) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js" defer></script>
 </head>
 <body class="bg-gray-50">
   <div id="root"></div>
 
-  <!-- Main application code – runs after all libs are loaded -->
-  <script type="text/babel" data-type="module">
-    // Wait until all dependency scripts are ready before executing app code
-    window.addEventListener('DOMContentLoaded', () => {
-      const {
-        Plus = () => <span className="font-bold">+</span>,
-        Minus = () => <span className="font-bold">−</span>,
-        Search = () => <span className="font-bold">🔍</span>,
-        AlertCircle = () => <span className="font-bold">!</span>,
-        Clock = () => <span className="font-bold">⏰</span>,
-        Package: PackageIcon = () => <span className="font-bold">📦</span>,
-        Cloud = () => <span className="font-bold">☁️</span>,
-        CloudOff = () => <span className="font-bold">🚫</span>
-      } = window.lucideReact || window.LucideReact || {};
+  <!-- App code -->
+  <script type="text/babel" data-presets="react">
+    // Wait until the DOM is ready and globals are loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      // Lucide: map raw SVG strings -> simple <span dangerouslySetInnerHTML> wrappers
+      const icon = (name) => (props) => {
+        const svg = lucide[name]?.toSvg({ ...props, class: props.className });
+        return <span dangerouslySetInnerHTML={{ __html: svg }} />;
+      };
+      const Plus = icon('Plus');
+      const Minus = icon('Minus');
+      const Search = icon('Search');
+      const AlertCircle = icon('AlertCircle');
+      const Clock = icon('Clock');
+      const Package = icon('Package');
+      const Cloud = icon('Cloud');
+      const CloudOff = icon('CloudOff');
 
-      // Fallback icons mapping (Package icon renamed for JSX collision)
-      const Package = PackageIcon;
-
-      // ------------------------------------------------------------
-      // Firebase bootstrap
-      // ------------------------------------------------------------
+      // Firebase bootstrap ------------------------------------------------
       const firebaseConfig = {
         apiKey: "AIzaSyCpbaIxV6nDIose-RdRYeC-3-eH-oIsaRA",
         authDomain: "fridge-tracker-home.firebaseapp.com",
@@ -54,147 +52,158 @@
         projectId: "fridge-tracker-home",
         storageBucket: "fridge-tracker-home.appspot.com",
         messagingSenderId: "580588734189",
-        appId: "1:580588734189:web:c8c0c03a0fcc509707aee4"
+        appId: "1:580588734189:web:c8c0c03a0fcc509707aee4",
       };
-
       firebase.initializeApp(firebaseConfig);
       const db = firebase.database();
       const itemsRef = db.ref('items');
 
-      // ------------------------------------------------------------
-      // React components & helpers
-      // ------------------------------------------------------------
+      // Helpers -----------------------------------------------------------
       const categories = ['All', 'Dairy', 'Produce', 'Beverages', 'Frozen', 'Pantry', 'Condiments', 'Leftovers'];
       const units = ['pieces', 'kg', 'g', 'litres', 'mL', 'cups', 'bottles', 'cans', 'servings', 'slices', 'carton', 'bags', 'bunches'];
 
-      // Small reusable stat card
-      const StatCard = ({ icon, label, value, color }) => (
-        <div className={`bg-${color}-100 p-3 rounded-lg text-center`}>
+      const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 86400000);
+      const expClass = (d) => {
+        const delta = daysUntil(d);
+        return delta <= 0 ? 'bg-red-100 border-red-300' : delta <= 3 ? 'bg-yellow-100 border-yellow-300' : 'bg-white';
+      };
+
+      const Stat = ({ icon, label, val, color }) => (
+        <div className={`rounded-lg p-3 text-center bg-${color}-100`}>
           {icon}
-          <div className={`text-xl font-bold text-${color}-700`}>{value}</div>
+          <div className={`text-xl font-bold text-${color}-700`}>{val}</div>
           <div className="text-xs text-gray-700">{label}</div>
         </div>
       );
 
-      const daysUntil = (dateStr) => {
-        const today = new Date();
-        const exp = new Date(dateStr);
-        return Math.ceil((exp - today) / 86400000);
-      };
-
-      const expClass = (dateStr) => {
-        const d = daysUntil(dateStr);
-        if (d <= 0) return 'bg-red-100 border-red-300';
-        if (d <= 3) return 'bg-yellow-100 border-yellow-300';
-        return 'bg-white';
-      };
-
-      function FridgeApp() {
-        const [currentUser, setCurrentUser] = React.useState(localStorage.getItem('fridgeUser') || '');
-        const [showUserModal, setShowUserModal] = React.useState(!currentUser);
+      // Main component ----------------------------------------------------
+      function App() {
+        const [user, setUser] = React.useState(localStorage.getItem('fridgeUser') || '');
         const [items, setItems] = React.useState([]);
+        const [search, setSearch] = React.useState('');
+        const [cat, setCat] = React.useState('All');
+        const [showAdd, setShowAdd] = React.useState(false);
+        const [draft, setDraft] = React.useState({ name: '', quantity: 1, unit: 'pieces', category: 'Produce', expirationDate: '', lowStockThreshold: 1 });
         const [connecting, setConnecting] = React.useState(true);
-        const [searchTerm, setSearchTerm] = React.useState('');
-        const [selectedCategory, setSelectedCategory] = React.useState('All');
-        const [showAddForm, setShowAddForm] = React.useState(false);
-        const [newItem, setNewItem] = React.useState({ name: '', quantity: 1, unit: 'pieces', category: 'Produce', expirationDate: '', lowStockThreshold: 1 });
 
-        // Firebase listener
         React.useEffect(() => {
-          const handle = itemsRef.on('value', (snap) => {
-            const data = snap.val();
-            const list = data ? Object.entries(data).map(([id, item]) => ({ id, ...item })) : [];
-            setItems(list);
+          const h = itemsRef.on('value', (s) => {
+            const data = s.val();
+            setItems(data ? Object.entries(data).map(([id, i]) => ({ id, ...i })) : []);
             setConnecting(false);
           });
-          return () => itemsRef.off('value', handle);
+          return () => itemsRef.off('value', h);
         }, []);
 
-        // Seed sample data if DB empty
         React.useEffect(() => {
           if (!connecting && items.length === 0) {
             itemsRef.set({
               sample1: { name: 'Orange Juice', quantity: 2, unit: 'litres', category: 'Beverages', expirationDate: new Date(Date.now()+5*864e5).toISOString().split('T')[0], lowStockThreshold: 1, lastUpdatedBy: 'System', lastUpdated: new Date().toISOString() },
-              sample2: { name: 'Egg Whites', quantity: 500, unit: 'mL', category: 'Dairy', expirationDate: new Date(Date.now()+10*864e5).toISOString().split('T')[0], lowStockThreshold: 100, lastUpdatedBy: 'System', lastUpdated: new Date().toISOString() },
-              sample3: { name: 'Milk', quantity: 4, unit: 'litres', category: 'Dairy', expirationDate: new Date(Date.now()+3*864e5).toISOString().split('T')[0], lowStockThreshold: 1, lastUpdatedBy: 'System', lastUpdated: new Date().toISOString() },
-              sample4: { name: 'Leftover Pizza', quantity: 4, unit: 'slices', category: 'Leftovers', expirationDate: new Date(Date.now()+2*864e5).toISOString().split('T')[0], lowStockThreshold: 1, lastUpdatedBy: 'System', lastUpdated: new Date().toISOString() }
             });
           }
         }, [connecting]);
 
-        const handleSubmitUser = () => {
-          if (currentUser.trim()) {
-            localStorage.setItem('fridgeUser', currentUser.trim());
-            setShowUserModal(false);
+        const submitUser = () => {
+          if (user.trim()) {
+            localStorage.setItem('fridgeUser', user.trim());
           }
         };
 
-        const addItemToDB = (item) => itemsRef.push(item);
-        const deleteItemFromDB = (id) => itemsRef.child(id).remove();
-        const transactQuantity = (id, delta) => itemsRef.child(id).transaction((item) => {
-          if (item) {
-            const q = Math.max(0, (item.quantity || 0) + delta);
-            return { ...item, quantity: q, lastUpdatedBy: currentUser, lastUpdated: new Date().toISOString() };
+        const add = () => {
+          if (draft.name && draft.expirationDate) {
+            itemsRef.push({ ...draft, lastUpdatedBy: user, lastUpdated: new Date().toISOString() });
+            setDraft({ name: '', quantity: 1, unit: 'pieces', category: 'Produce', expirationDate: '', lowStockThreshold: 1 });
+            setShowAdd(false);
           }
-          return item;
-        });
+        };
 
-        const filtered = items.filter((i) => {
-          return i.name.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCategory==='All' || i.category===selectedCategory);
-        });
+        const txQty = (id, d) => itemsRef.child(id).transaction((it) => it ? { ...it, quantity: Math.max(0, (it.quantity||0)+d), lastUpdatedBy: user, lastUpdated: new Date().toISOString() } : it);
 
-        const stats = React.useMemo(() => ({
-          total: items.length,
-          lowStock: items.filter((i)=>i.quantity<=i.lowStockThreshold).length,
-          expiring: items.filter((i)=>daysUntil(i.expirationDate)<=3).length
-        }), [items]);
+        const del = (id) => itemsRef.child(id).remove();
 
-        // ----------------- RENDER ---------------------
-        if (showUserModal) {
-          return (
-            <div className="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 p-4">
-              <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-                <h2 className="text-2xl font-bold mb-4">Welcome to Fridge Tracker</h2>
-                <input className="w-full p-3 border rounded-lg mb-4" placeholder="Enter your name" value={currentUser} onChange={(e)=>setCurrentUser(e.target.value)} onKeyDown={(e)=>e.key==='Enter'&&handleSubmitUser()} />
-                <button className="w-full bg-blue-500 text-white p-3 rounded-lg font-semibold" onClick={handleSubmitUser}>Start Tracking</button>
-              </div>
+        const list = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()) && (cat==='All' || i.category===cat));
+
+        const stats = { total: items.length, low: items.filter(i=>i.quantity<=i.lowStockThreshold).length, exp: items.filter(i=>daysUntil(i.expirationDate)<=3).length };
+
+        if (!user) return (
+          <div className="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 p-4">
+            <div className="bg-white p-6 rounded-lg max-w-sm w-full">
+              <h2 className="text-2xl font-bold mb-4">Welcome</h2>
+              <input className="w-full border p-3 rounded mb-4" placeholder="Your name" value={user} onChange={e=>setUser(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submitUser()} />
+              <button className="w-full bg-blue-500 text-white p-3 rounded" onClick={submitUser}>Enter</button>
             </div>
-          );
-        }
+          </div>
+        );
 
         return (
           <div className="min-h-screen flex flex-col">
+            {/* Header */}
             <header className="bg-white shadow-sm sticky top-0 z-10 p-4">
               <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold">Fridge Inventory</h1>
-                <div className="text-sm text-gray-600 flex items-center gap-2">
-                  {connecting ? <CloudOff className="w-5 h-5 text-amber-600" /> : <Cloud className="w-5 h-5 text-emerald-600" />}<span>User: {currentUser}</span>
-                  <button className="text-xs text-blue-500" onClick={()=>{localStorage.removeItem('fridgeUser');setShowUserModal(true);}}>change</button>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  {connecting ? <CloudOff className="w-5 h-5 text-amber-600"/> : <Cloud className="w-5 h-5 text-emerald-600"/>}
+                  <span>{user}</span>
+                  <button className="text-blue-500 text-xs" onClick={()=>{localStorage.removeItem('fridgeUser');setUser('');}}>change</button>
                 </div>
               </div>
-
               <div className="grid grid-cols-3 gap-3 mb-4">
-                <StatCard icon={<Package className="w-5 h-5 mx-auto" />} value={stats.total} label="Total Items" color="blue" />
-                <StatCard icon={<AlertCircle className="w-5 h-5 mx-auto" />} value={stats.lowStock} label="Low Stock" color="yellow" />
-                <StatCard icon={<Clock className="w-5 h-5 mx-auto" />} value={stats.expiring} label="Expiring" color="red" />
+                <Stat icon={<Package className="w-5 h-5 mx-auto"/>} label="Total" val={stats.total} color="blue" />
+                <Stat icon={<AlertCircle className="w-5 h-5 mx-auto"/>} label="Low" val={stats.low} color="yellow" />
+                <Stat icon={<Clock className="w-5 h-5 mx-auto"/>} label="Exp" val={stats.exp} color="red" />
               </div>
-
               <div className="flex gap-2 mb-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <input className="w-full pl-10 pr-3 py-2 border rounded-lg" placeholder="Search…" value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} />
+                  <input className="w-full border rounded pl-10 pr-3 py-2" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} />
                 </div>
-                <button className="bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2" onClick={()=>setShowAddForm(true)}><Plus className="w-4 h-4" />Add</button>
+                <button className="bg-blue-500 text-white px-4 py-2 rounded flex items-center gap-2" onClick={()=>setShowAdd(true)}><Plus className="w-4 h-4"/>Add</button>
               </div>
-
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {categories.map((c)=>(<button key={c} className={`${selectedCategory===c?'bg-blue-500 text-white':'bg-gray-200 text-gray-700'} px-3 py-1 rounded-full text-sm`} onClick={()=>setSelectedCategory(c)}>{c}</button>))}
+                {categories.map(c=><button key={c} className={`${cat===c?'bg-blue-500 text-white':'bg-gray-200 text-gray-700'} px-3 py-1 rounded-full text-sm`} onClick={()=>setCat(c)}>{c}</button>)}
               </div>
             </header>
 
             <main className="flex-1 p-4">
-              {filtered.length===0 ? (
-                <div className="text-center py-8 text-gray-500"><Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />{connecting?'Connecting…':'No items found'}</div>
-              ) : (
-                filtered.map((item)=>(
-                  <div key={item.id} className={`mb-3 p-4 rounded-lg border ${expClass(item.expirationDate)}`}>
+              {list.length===0 ? (
+                <div className="text-center py-8 text-gray-500"><Package className="w-12 h-12 mx-auto mb-3 text-gray-300"/>{connecting?'Connecting…':'No items'}</div>
+              ) : list.map(it=>{
+                const d=daysUntil(it.expirationDate); const low=it.quantity<=it.lowStockThreshold;
+                return (
+                  <div key={it.id} className={`mb-3 p-4 rounded-lg border ${expClass(it.expirationDate)}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-semibold text-lg">{it.name}</h3>
+                        <div className="text-xs text-gray-600">{it.category} • by {it.lastUpdatedBy}</div>
+                      </div>
+                      <button className="text-red-500 text-sm" onClick={()=>del(it.id)}>Remove</button>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <button className="p-2 bg-gray-200 rounded" onClick={()=>txQty(it.id,-1)}><Minus className="w-4 h-4"/></button>
+                        <div className="text-center">
+                          <div className="text-xl font-bold">{it.quantity} {it.unit}</div>
+                          {low && <div className="text-xs text-red-600">Low!</div>}
+                        </div>
+                        <button className="p-2 bg-gray-200 rounded" onClick={()=>txQty(it.id,1)}><Plus className="w-4 h-4"/></button>
+                      </div>
+                      <div className="text-right text-sm">
+                        <div>Expires in</div>
+                        <div className={d<=3?'text-red-600 font-semibold':'font-semibold'}>{d} days</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </main>
+
+            {showAdd && (
+              <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center p-4 z-20">
+                <div className="bg-white p-6 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+                  <h2 className="text-xl font-bold mb-4">Add Item</h2>
+                  <input className="w-full border p-2 mb-3 rounded" placeholder="Name" value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} />
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <input type="number" className="border p-2 rounded" placeholder="Qty" value={draft.quantity} onChange={e=>setDraft({...draft,quantity:+e.target.value})} />
+                    <select className="border p-2 rounded" value={draft.unit} onChange={e=>setDraft({...draft,unit:e.target.value})}>{units.map(u=><option key={u}>{u}</option>)}</select>
+                  </div>
+                  <select className="border p-2 rounded w-full mb-3" value={draft.category} onChange={e=>setDraft({...draft,category:e.target.value})}>{categories.filter(c=>c!=='All').map(c=><option key={c}>{c
