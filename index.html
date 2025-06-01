@@ -111,6 +111,21 @@
                     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
+                ),
+                Home: () => (
+                    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                ),
+                Building: () => (
+                    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                ),
+                ChevronDown: () => (
+                    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                 )
             };
             
@@ -127,6 +142,7 @@
             const [selectedCategory, setSelectedCategory] = useState('All');
             const [showAddForm, setShowAddForm] = useState(false);
             const [connected, setConnected] = useState(true);
+            const [showHouseholdDropdown, setShowHouseholdDropdown] = useState(false);
             const [newItem, setNewItem] = useState({
                 name: '',
                 quantity: 1,
@@ -136,8 +152,30 @@
                 lowStockThreshold: 1
             });
 
+            // Household management
+            const households = [
+                { id: 'poco', name: 'Poco', icon: 'Home' },
+                { id: 'vancouver', name: 'Vancouver', icon: 'Building' }
+            ];
+            const [currentHousehold, setCurrentHousehold] = useState('poco');
+
             const categories = ['All', 'Dairy', 'Produce', 'Beverages', 'Frozen', 'Pantry', 'Condiments', 'Leftovers'];
             const units = ['pieces', 'kg', 'g', 'litres', 'mL', 'cups', 'bottles', 'cans', 'servings', 'slices', 'carton', 'bags', 'bunches'];
+
+            // Load saved household preference
+            useEffect(() => {
+                const savedHousehold = localStorage.getItem('selectedHousehold');
+                if (savedHousehold && households.find(h => h.id === savedHousehold)) {
+                    setCurrentHousehold(savedHousehold);
+                }
+            }, []);
+
+            // Save household preference when changed
+            const handleHouseholdChange = (householdId) => {
+                setCurrentHousehold(householdId);
+                localStorage.setItem('selectedHousehold', householdId);
+                setShowHouseholdDropdown(false);
+            };
 
             // Auth state listener
             useEffect(() => {
@@ -151,7 +189,7 @@
 
             // Database listeners (only when authenticated)
             useEffect(() => {
-                if (user) {
+                if (user && currentHousehold) {
                     setLoading(true);
                     
                     // Connection state listener
@@ -160,8 +198,8 @@
                         setConnected(snap.val() === true);
                     });
 
-                    // Items listener
-                    const itemsRef = database.ref('items');
+                    // Items listener for current household
+                    const itemsRef = database.ref(`households/${currentHousehold}/items`);
                     itemsRef.on('value', (snapshot) => {
                         const data = snapshot.val();
                         if (data) {
@@ -217,7 +255,7 @@
                             ];
 
                             sampleItems.forEach(item => {
-                                database.ref('items').push(item);
+                                database.ref(`households/${currentHousehold}/items`).push(item);
                             });
                         }
                         setLoading(false);
@@ -228,7 +266,7 @@
                         itemsRef.off();
                     };
                 }
-            }, [user]);
+            }, [user, currentHousehold]);
 
             const signInWithGoogle = async () => {
                 try {
@@ -252,7 +290,7 @@
                 const item = items.find(item => item.id === id);
                 if (item) {
                     const newQuantity = Math.max(0, item.quantity + delta);
-                    database.ref(`items/${id}`).update({
+                    database.ref(`households/${currentHousehold}/items/${id}`).update({
                         quantity: newQuantity,
                         lastUpdatedBy: user.displayName || user.email,
                         lastUpdated: new Date().toISOString()
@@ -267,7 +305,7 @@
                         lastUpdatedBy: user.displayName || user.email,
                         lastUpdated: new Date().toISOString()
                     };
-                    database.ref('items').push(item);
+                    database.ref(`households/${currentHousehold}/items`).push(item);
                     setNewItem({
                         name: '',
                         quantity: 1,
@@ -281,7 +319,7 @@
             };
 
             const deleteItem = async (id) => {
-                database.ref(`items/${id}`).remove();
+                database.ref(`households/${currentHousehold}/items/${id}`).remove();
             };
 
             const getDaysUntilExpiration = (expirationDate) => {
@@ -316,6 +354,7 @@
             };
 
             const stats = getStats();
+            const currentHouseholdData = households.find(h => h.id === currentHousehold);
 
             // Show loading while checking auth
             if (authLoading) {
@@ -375,6 +414,36 @@
                         <div className="p-4">
                             <div className="flex justify-between items-center mb-4">
                                 <h1 className="text-2xl font-bold">Fridge Inventory</h1>
+                                
+                                {/* Household Selector */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowHouseholdDropdown(!showHouseholdDropdown)}
+                                        className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                                    >
+                                        <Icon icon={currentHouseholdData.icon} className="w-4 h-4 text-gray-600" />
+                                        <span className="font-medium">{currentHouseholdData.name}</span>
+                                        <Icon icon="ChevronDown" className="w-4 h-4 text-gray-500" />
+                                    </button>
+                                    
+                                    {showHouseholdDropdown && (
+                                        <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[150px]">
+                                            {households.map(household => (
+                                                <button
+                                                    key={household.id}
+                                                    onClick={() => handleHouseholdChange(household.id)}
+                                                    className={`w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-50 transition-colors ${
+                                                        currentHousehold === household.id ? 'bg-blue-50 text-blue-600' : ''
+                                                    }`}
+                                                >
+                                                    <Icon icon={household.icon} className="w-4 h-4" />
+                                                    <span>{household.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="text-right">
                                     <div className="text-sm text-gray-600 flex items-center gap-2 justify-end">
                                         {connected ? (
@@ -554,7 +623,7 @@
                     {showAddForm && (
                         <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center p-4 z-20">
                             <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-                                <h2 className="text-xl font-bold mb-4">Add New Item</h2>
+                                <h2 className="text-xl font-bold mb-4">Add New Item to {currentHouseholdData.name}</h2>
                                 <div>
                                     <div className="mb-4">
                                         <label className="block text-sm font-medium mb-1">Item Name</label>
