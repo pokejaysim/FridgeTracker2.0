@@ -126,6 +126,11 @@
                     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
+                ),
+                Sparkles: () => (
+                    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
                 )
             };
             
@@ -210,53 +215,6 @@
                             setItems(itemsList);
                         } else {
                             setItems([]);
-                            // Initialize with sample data if empty
-                            const sampleItems = [
-                                {
-                                    name: 'Orange Juice',
-                                    quantity: 2,
-                                    unit: 'litres',
-                                    category: 'Beverages',
-                                    expirationDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                                    lowStockThreshold: 1,
-                                    lastUpdatedBy: user.displayName || user.email,
-                                    lastUpdated: new Date().toISOString()
-                                },
-                                {
-                                    name: 'Egg Whites',
-                                    quantity: 500,
-                                    unit: 'mL',
-                                    category: 'Dairy',
-                                    expirationDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                                    lowStockThreshold: 100,
-                                    lastUpdatedBy: user.displayName || user.email,
-                                    lastUpdated: new Date().toISOString()
-                                },
-                                {
-                                    name: 'Milk',
-                                    quantity: 4,
-                                    unit: 'litres',
-                                    category: 'Dairy',
-                                    expirationDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                                    lowStockThreshold: 1,
-                                    lastUpdatedBy: user.displayName || user.email,
-                                    lastUpdated: new Date().toISOString()
-                                },
-                                {
-                                    name: 'Leftover Pizza',
-                                    quantity: 4,
-                                    unit: 'slices',
-                                    category: 'Leftovers',
-                                    expirationDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                                    lowStockThreshold: 1,
-                                    lastUpdatedBy: user.displayName || user.email,
-                                    lastUpdated: new Date().toISOString()
-                                }
-                            ];
-
-                            sampleItems.forEach(item => {
-                                database.ref(`households/${currentHousehold}/items`).push(item);
-                            });
                         }
                         setLoading(false);
                     });
@@ -320,6 +278,55 @@
 
             const deleteItem = async (id) => {
                 database.ref(`households/${currentHousehold}/items/${id}`).remove();
+            };
+
+            const addSampleData = async () => {
+                const sampleItems = [
+                    {
+                        name: 'Orange Juice',
+                        quantity: 2,
+                        unit: 'litres',
+                        category: 'Beverages',
+                        expirationDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        lowStockThreshold: 1,
+                        lastUpdatedBy: user.displayName || user.email,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    {
+                        name: 'Egg Whites',
+                        quantity: 500,
+                        unit: 'mL',
+                        category: 'Dairy',
+                        expirationDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        lowStockThreshold: 100,
+                        lastUpdatedBy: user.displayName || user.email,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    {
+                        name: 'Milk',
+                        quantity: 4,
+                        unit: 'litres',
+                        category: 'Dairy',
+                        expirationDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        lowStockThreshold: 1,
+                        lastUpdatedBy: user.displayName || user.email,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    {
+                        name: 'Leftover Pizza',
+                        quantity: 4,
+                        unit: 'slices',
+                        category: 'Leftovers',
+                        expirationDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        lowStockThreshold: 1,
+                        lastUpdatedBy: user.displayName || user.email,
+                        lastUpdated: new Date().toISOString()
+                    }
+                ];
+
+                sampleItems.forEach(item => {
+                    database.ref(`households/${currentHousehold}/items`).push(item);
+                });
             };
 
             const getDaysUntilExpiration = (expirationDate) => {
@@ -540,6 +547,15 @@
                                 <Icon icon="Package" className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                                 <p>No items found</p>
                                 <p className="text-sm mt-1">Add some items to get started!</p>
+                                {items.length === 0 && (
+                                    <button
+                                        onClick={addSampleData}
+                                        className="mt-4 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-200 mx-auto"
+                                    >
+                                        <Icon icon="Sparkles" className="w-4 h-4" />
+                                        Add Sample Items
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             filteredItems.map(item => {
